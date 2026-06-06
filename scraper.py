@@ -40,12 +40,13 @@ BLACKLIST_KEYWORDS = ['-1', '127.0.0.1', 'timeout', 'err', '错误', '剩余', '
 MAX_WORKERS = 16
 
 # 最终保留的最大节点数（去重后截取，控制订阅体积）
-MAX_NODES = 1000
+MAX_NODES = 2000
 
 # 协议优先级：数字越小越优先保留（较新/性能较好的协议靠前）
+# vless 带 type=xhttp 传输的单独提优先级，见 sort_key()
 PROTOCOL_PRIORITY = {
-    'hysteria2://': 0, 'tuic://': 1, 'vless://': 2,
-    'trojan://': 3, 'vmess://': 4, 'ss://': 5, 'ssr://': 6,
+    'hysteria2://': 0, 'tuic://': 1, 'vless://': 3,
+    'trojan://': 4, 'vmess://': 5, 'ss://': 6, 'ssr://': 7,
 }
 
 # ====================================================
@@ -91,22 +92,19 @@ def fetch_and_decode(url):
 
 
 def node_identity(link):
-    """提取节点真实地址做去重，忽略备注差异。"""
+    """仅按 IP:port 去重，同一服务器的多参数变体只保留一个。"""
     if link.startswith("vmess://"):
         try:
             b64 = link[8:]
             v = json.loads(base64.b64decode(b64 + "=" * (-len(b64) % 4)).decode('utf-8'))
-            return f"vmess:{v.get('add')}:{v.get('port')}:{v.get('id')}"
+            return f"{v.get('add')}:{v.get('port')}".lower()
         except Exception:
             return link
-    # vless/trojan/ss/... 归一化：host:port + 用户信息 + 排序后的查询参数，消除参数顺序差异
+    # vless/trojan/ss/ssr/tuic/hysteria2：取 host:port（netloc 去掉用户信息部分）
     try:
-        parts = urlsplit(link.split("#", 1)[0])
-        # 部分忽略对识别无意义的参数（如客户端备注类）
-        ignore = {'remarks', 'remark', 'alpn'}
-        qs = sorted((k, v) for k, v in parse_qsl(parts.query) if k.lower() not in ignore)
-        qs_norm = "&".join(f"{k}={v}" for k, v in qs)
-        return f"{parts.scheme}:{parts.netloc.lower()}:{qs_norm}"
+        netloc = urlsplit(link.split("#", 1)[0]).netloc.lower()
+        host_port = netloc.rsplit("@", 1)[-1]  # 去掉 user:pass@ 前缀
+        return host_port
     except Exception:
         return link.split("#", 1)[0]
 
@@ -172,7 +170,11 @@ def main():
     # 按 (协议优先级, 节点地址) 排序：优先保留较新协议，同优先级稳定排序减少 Git diff 抖动
     def sort_key(node):
         proto = next((p for p in SUPPORTED_PROTOCOLS if node.startswith(p)), '~')
-        return (PROTOCOL_PRIORITY.get(proto, 99), node)
+        prio = PROTOCOL_PRIORITY.get(proto, 99)
+        # vless 带 xhttp 传输的提到普通 vless 之前（h2=0,tuic=1, 这里=2, 普通vless=3）
+        if proto == 'vless://' and 'type=xhttp' in node.lower():
+            prio = 2
+        return (prio, node)
 
     valid_nodes.sort(key=sort_key)
     valid_nodes = valid_nodes[:MAX_NODES]
