@@ -92,20 +92,19 @@ def fetch_and_decode(url):
 
 
 def node_identity(link):
-    """仅按 IP/host 去重，同一服务器（不论端口）只保留一个。"""
+    """按 IP:port 去重，同一服务器不同端口都保留。"""
     if link.startswith("vmess://"):
         try:
             b64 = link[8:]
             v = json.loads(base64.b64decode(b64 + "=" * (-len(b64) % 4)).decode('utf-8'))
-            return str(v.get('add')).lower()
+            return f"{v.get('add')}:{v.get('port')}".lower()
         except Exception:
             return link
-    # vless/trojan/ss/ssr/tuic/hysteria2：取 host（去掉用户信息和端口）
+    # vless/trojan/ss/ssr/tuic/hysteria2：取 host:port（去掉用户信息部分）
     try:
         netloc = urlsplit(link.split("#", 1)[0]).netloc.lower()
         host_port = netloc.rsplit("@", 1)[-1]   # 去掉 user:pass@ 前缀
-        host = host_port.rsplit(":", 1)[0]      # 去掉 :port
-        return host
+        return host_port
     except Exception:
         return link.split("#", 1)[0]
 
