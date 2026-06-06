@@ -160,7 +160,7 @@ def main():
             continue
         if any(kw.lower() in line.lower() for kw in BLACKLIST_KEYWORDS):
             continue
-        if 'type=xhttp' in line.lower():   # 过滤 xhttp 传输的 vless 节点
+        if not line.startswith('hysteria2://'):   # 只保留 hysteria2 节点
             continue
         ident = node_identity(line)
         if ident in seen:
@@ -168,15 +168,10 @@ def main():
         seen.add(ident)
         valid_nodes.append(line)
 
-    print(f"[*] 去重后共 {len(valid_nodes)} 个节点，按协议优先级排序并截取前 {MAX_NODES} 个...")
+    print(f"[*] 去重后共 {len(valid_nodes)} 个 hysteria2 节点，不限数量全部保留...")
 
-    # 按 (协议优先级, 节点地址) 排序：优先保留较新协议，同优先级稳定排序减少 Git diff 抖动
-    def sort_key(node):
-        proto = next((p for p in SUPPORTED_PROTOCOLS if node.startswith(p)), '~')
-        return (PROTOCOL_PRIORITY.get(proto, 99), node)
-
-    valid_nodes.sort(key=sort_key)
-    valid_nodes = valid_nodes[:MAX_NODES]
+    # 稳定排序减少 Git diff 抖动（全是 hysteria2，按地址排）
+    valid_nodes.sort()
 
     print(f"[*] 正在进行全自动重命名...")
     final_nodes = [rename_node(node, i) for i, node in enumerate(valid_nodes, 1)]
