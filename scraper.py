@@ -43,10 +43,10 @@ MAX_WORKERS = 16
 MAX_NODES = 3000
 
 # 协议优先级：数字越小越优先保留（较新/性能较好的协议靠前）
-# vless 带 type=xhttp 传输的单独提优先级，见 sort_key()
+# 优先级：hysteria2 > vless > vmess > 其余
 PROTOCOL_PRIORITY = {
-    'hysteria2://': 0, 'tuic://': 1, 'vless://': 3,
-    'trojan://': 4, 'vmess://': 5, 'ss://': 6, 'ssr://': 7,
+    'hysteria2://': 0, 'vless://': 1, 'vmess://': 2,
+    'tuic://': 3, 'trojan://': 4, 'ss://': 5, 'ssr://': 6,
 }
 
 # ====================================================
@@ -160,6 +160,8 @@ def main():
             continue
         if any(kw.lower() in line.lower() for kw in BLACKLIST_KEYWORDS):
             continue
+        if 'type=xhttp' in line.lower():   # 过滤 xhttp 传输的 vless 节点
+            continue
         ident = node_identity(line)
         if ident in seen:
             continue
@@ -171,11 +173,7 @@ def main():
     # 按 (协议优先级, 节点地址) 排序：优先保留较新协议，同优先级稳定排序减少 Git diff 抖动
     def sort_key(node):
         proto = next((p for p in SUPPORTED_PROTOCOLS if node.startswith(p)), '~')
-        prio = PROTOCOL_PRIORITY.get(proto, 99)
-        # vless 带 xhttp 传输的提到普通 vless 之前（h2=0,tuic=1, 这里=2, 普通vless=3）
-        if proto == 'vless://' and 'type=xhttp' in node.lower():
-            prio = 2
-        return (prio, node)
+        return (PROTOCOL_PRIORITY.get(proto, 99), node)
 
     valid_nodes.sort(key=sort_key)
     valid_nodes = valid_nodes[:MAX_NODES]
