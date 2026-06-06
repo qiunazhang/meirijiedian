@@ -1,1 +1,2 @@
 requests>=2.31.0
+singbox2proxy>=0.3.4

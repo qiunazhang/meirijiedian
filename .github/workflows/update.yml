@@ -26,6 +26,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Install sing-box
+        run: |
+          curl -fsSL https://sing-box.app/install.sh | sudo sh
+          sing-box version
+
       - name: Run Scraper Script
         run: |
           python scraper.py

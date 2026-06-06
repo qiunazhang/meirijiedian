@@ -137,6 +137,49 @@ def rename_node(link, index):
     return link
 
 
+def test_alive(nodes):
+    """用 sing-box 真实拨号测连通性，只返回测通的节点（保序）。"""
+    if not nodes:
+        return []
+    try:
+        from singbox2proxy import SingBoxBatch
+    except ImportError:
+        print("[!] 未安装 singbox2proxy，跳过测活（严格模式下视为无活节点）")
+        return []
+
+    # 自己判定：generate_204 返回 204 即通（包内置 check 只认 200，会漏判）
+    TEST_URL = "https://www.gstatic.com/generate_204"
+    TIMEOUT = 8
+
+    def probe(bp):
+        try:
+            resp = bp.get(TEST_URL, timeout=TIMEOUT)
+            return bp.url, (200 <= resp.status_code < 400)
+        except Exception:
+            return bp.url, False
+
+    batch = None
+    try:
+        batch = SingBoxBatch(nodes, batch_size=30, log_level="error")
+        alive = set()
+        with ThreadPoolExecutor(max_workers=20) as ex:
+            for url, ok in ex.map(probe, list(batch)):
+                if ok:
+                    alive.add(url)
+                print(f"    [{'OK' if ok else '××'}]  {url[:70]}")
+        # 按原 nodes 顺序保留测通的
+        return [n for n in nodes if n in alive]
+    except Exception as e:
+        print(f"[!] 测活异常，严格模式下视为无活节点: {e}")
+        return []
+    finally:
+        if batch is not None:
+            try:
+                batch.stop()
+            except Exception:
+                pass
+
+
 def main():
     print(f"=== 开始执行高级抓取与清洗任务 {datetime.now()} ===")
     all_lines = []
@@ -171,6 +214,10 @@ def main():
 
     # 稳定排序减少 Git diff 抖动（全是 hysteria2，按地址排）
     valid_nodes.sort()
+
+    print(f"[*] 开始连通性测试 {len(valid_nodes)} 个节点（sing-box 真实拨号）...")
+    valid_nodes = test_alive(valid_nodes)
+    print(f"[*] 测活通过 {len(valid_nodes)} 个节点")
 
     print(f"[*] 正在进行全自动重命名...")
     final_nodes = [rename_node(node, i) for i, node in enumerate(valid_nodes, 1)]
