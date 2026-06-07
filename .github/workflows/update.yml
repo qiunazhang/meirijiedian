@@ -26,13 +26,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Install sing-box
-        run: |
-          # 锁定 1.12.x：singbox2proxy 0.3.4 生成的配置不兼容 sing-box 1.13 的 schema 变更，
-          # 装最新版会导致每个代理进程起不来、测活全部失败。
-          curl -fsSL https://sing-box.app/install.sh | sudo sh -s -- --version 1.12.8
-          sing-box version
-
       - name: Run Scraper Script
         run: |
           python scraper.py
