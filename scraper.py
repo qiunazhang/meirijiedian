@@ -210,15 +210,17 @@ def test_alive(nodes):
     try:
         batch = SingBoxBatch(nodes, batch_size=30, log_level="error")
         alive = set()
+        probe_list = list(batch)        # 实际入测的节点（可能少于 nodes）
+        total = len(probe_list)
         done = ok_cnt = 0
         with ThreadPoolExecutor(max_workers=20) as ex:
-            for url, ok in ex.map(probe, list(batch)):
+            for url, ok in ex.map(probe, probe_list):
                 done += 1
                 if ok:
                     alive.add(url)
                     ok_cnt += 1
                 # 只打印进度计数，不打印节点链接（避免编码崩溃 + 凭据外泄）
-                print(f"    [测活进度] {done}/{len(nodes)}  通 {ok_cnt}", flush=True)
+                print(f"    [测活进度] {done}/{total}  通 {ok_cnt}", flush=True)
         # 按原 nodes 顺序保留测通的
         return [n for n in nodes if n in alive]
     except Exception as e:
@@ -256,7 +258,7 @@ def main():
             continue
         if any(kw.lower() in line.lower() for kw in BLACKLIST_KEYWORDS):
             continue
-        if not line.startswith(('hysteria2://', 'tuic://', 'vless://')):   # 只保留 hysteria2 + tuic 节点
+        if not line.startswith(('hysteria2://', 'tuic://', 'vless://', 'vmess://')):   # 保留 h2 + tuic + vless + vmess
             continue
         ident = node_identity(line)
         if ident in seen:
