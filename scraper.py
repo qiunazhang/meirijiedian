@@ -31,7 +31,55 @@ SOURCE_URLS = [
     "https://raw.githubusercontent.com/ebrasha/free-v2ray-public-list/main/V2Ray-Config-By-EbraSha-All-Type.txt",
     "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/sub/splitted/trojan.txt",
     "https://gt.1155555.xyz/https://raw.githubusercontent.com/shaoyouvip/free/refs/heads/main/base64.txt",
+
+    # ===== 来自 ishalumi/proxy-node-collector/sources.yaml（已去重）=====
+    "https://raw.githubusercontent.com/barry-far/V2ray-Config/main/All_Configs_Sub.txt",
+    "https://raw.githubusercontent.com/MatinGhanbari/v2ray-configs/main/subscriptions/v2ray/all_sub.txt",
+    "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/Eternity",
+    "https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/All_Configs_Sub.txt",
+    "https://raw.githubusercontent.com/xyfqzy/free-nodes/main/ppt.txt",
+    "https://raw.githubusercontent.com/Barabama/FreeNodes/main/nodes/nodefree.txt",
+    "https://raw.githubusercontent.com/Barabama/FreeNodes/main/nodes/v2rayshare.txt",
+    "https://raw.githubusercontent.com/Barabama/FreeNodes/main/nodes/wenode.txt",
+    "https://raw.githubusercontent.com/Barabama/FreeNodes/main/nodes/ndnode.txt",
+    "https://raw.githubusercontent.com/Barabama/FreeNodes/main/nodes/yudou66.txt",
+    "https://raw.githubusercontent.com/peasoft/NoMoreWalls/master/list.txt",
+    "https://raw.githubusercontent.com/yzcjd/jiedian/main/%40yzcjd",
+    "https://raw.githubusercontent.com/snakem982/proxypool/main/source/clash-meta.yaml",
+    "https://raw.githubusercontent.com/snakem982/proxypool/main/source/clash-meta-2.yaml",
+    "https://clashnodev2ray.github.io/clash.yaml",
+    "https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub",
+    "https://raw.githubusercontent.com/sevcator/5ubscrpt10n/main/protocols/vm.txt",
+    "https://raw.githubusercontent.com/sevcator/5ubscrpt10n/main/protocols/vl.txt",
+    "https://raw.githubusercontent.com/sevcator/5ubscrpt10n/main/protocols/tr.txt",
+    "https://raw.githubusercontent.com/sevcator/5ubscrpt10n/main/protocols/ss.txt",
+    "https://raw.githubusercontent.com/VPNforWindowsSub/configs/master/full.txt",
+    "https://raw.githubusercontent.com/vxiaov/free_proxies/main/links.txt",
+
+    # ===== 定向 hysteria2 源（纯 h2 文件）=====
+    "https://raw.githubusercontent.com/MatinGhanbari/v2ray-configs/main/subscriptions/filtered/subs/hysteria2.txt",
+    "https://raw.githubusercontent.com/ebrasha/free-v2ray-public-list/main/V2Ray-Config-By-EbraSha-All-Type.txt",
 ]
+
+# 动态日期模板源（每日快照，运行时按当天日期生成 URL）
+SOURCE_URL_TEMPLATES = [
+    ("https://raw.githubusercontent.com/free-nodes/clashfree/main/clash{date}.yml", "%Y%m%d"),
+    ("https://node.mianfeiclash.com/uploads/{date}.txt", "%Y/%m/0-%Y%m%d"),
+]
+
+
+def build_source_urls():
+    """合并静态源 + 当天日期模板源，保序去重。"""
+    urls = list(SOURCE_URLS)
+    today = datetime.now()
+    for tmpl, fmt in SOURCE_URL_TEMPLATES:
+        urls.append(tmpl.replace("{date}", today.strftime(fmt)))
+    seen, out = set(), []
+    for u in urls:
+        if u and u not in seen:
+            seen.add(u)
+            out.append(u)
+    return out
 
 # 3. 垃圾节点过滤黑名单（可自行添加别人节点里的广告词过滤掉）
 BLACKLIST_KEYWORDS = ['-1', '127.0.0.1', 'timeout', 'err', '错误', '剩余', '到期', '官网', 'mibei77', '别买']
@@ -162,11 +210,15 @@ def test_alive(nodes):
     try:
         batch = SingBoxBatch(nodes, batch_size=30, log_level="error")
         alive = set()
+        done = ok_cnt = 0
         with ThreadPoolExecutor(max_workers=20) as ex:
             for url, ok in ex.map(probe, list(batch)):
+                done += 1
                 if ok:
                     alive.add(url)
-                print(f"    [{'OK' if ok else '××'}]  {url[:70]}")
+                    ok_cnt += 1
+                # 只打印进度计数，不打印节点链接（避免编码崩溃 + 凭据外泄）
+                print(f"    [测活进度] {done}/{len(nodes)}  通 {ok_cnt}", flush=True)
         # 按原 nodes 顺序保留测通的
         return [n for n in nodes if n in alive]
     except Exception as e:
@@ -185,9 +237,11 @@ def main():
     all_lines = []
 
     # 并发抓取，保留源顺序
+    source_urls = build_source_urls()
+    print(f"[*] 共 {len(source_urls)} 个订阅源")
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
-        futures = {ex.submit(fetch_and_decode, url): i for i, url in enumerate(SOURCE_URLS)}
-        results = [None] * len(SOURCE_URLS)
+        futures = {ex.submit(fetch_and_decode, url): i for i, url in enumerate(source_urls)}
+        results = [None] * len(source_urls)
         for fut in as_completed(futures):
             results[futures[fut]] = fut.result()
     for r in results:
