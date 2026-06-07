@@ -256,7 +256,7 @@ def main():
             continue
         if any(kw.lower() in line.lower() for kw in BLACKLIST_KEYWORDS):
             continue
-        if not line.startswith(('hysteria2://', 'tuic://')):   # 只保留 hysteria2 + tuic 节点
+        if not line.startswith(('hysteria2://', 'tuic://', 'vless://')):   # 只保留 hysteria2 + tuic 节点
             continue
         ident = node_identity(line)
         if ident in seen:
